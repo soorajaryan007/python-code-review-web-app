@@ -1,42 +1,65 @@
-# In backend/api/tasks.py
-
 import time
 from celery import shared_task
-from channels.layers import get_channel_layer  # <-- NEW IMPORT
-from asgiref.sync import async_to_sync  # <-- NEW IMPORT
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
+# --- NEW IMPORTS ---
+from groq import Groq
+from django.conf import settings
+# --- END NEW IMPORTS ---
 
 @shared_task
 def run_analysis_task(file_content):
     """
-    A mock AI analysis task that sends its result over a WebSocket.
+    This task now calls the Groq API for a free code review.
     """
-    print("--- ANALYSIS STARTED ---")
-    print(f"Analyzing content: {file_content[:50]}...")
+    print("--- ANALYSIS STARTED (with Groq) ---")
 
-    # 1. Simulate the long-running AI task
-    time.sleep(10)
+    try:
+        # --- THIS IS THE NEW AI CODE ---
+        client = Groq(api_key=settings.GROQ_API_KEY)
 
-    # 2. This is the new AI result
-    analysis_result = "This code looks great! (Real-time result from Celery)"
+        completion = client.chat.completions.create(
+            # We're using Llama 3, which is excellent
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert code reviewer. "
+                        "Find 3 potential bugs, style issues, or optimization "
+                        "opportunities in the following code. Be concise and use bullet points."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Here is the code to review:\n\n{file_content}"
+                }
+            ],
+            temperature=0.7,
+        )
 
-    print(f"--- ANALYSIS COMPLETE: {analysis_result} ---")
+        analysis_result = completion.choices[0].message.content
+        # --- END OF NEW AI CODE ---
 
-    # 3. --- NEW PART: Send the result over the WebSocket ---
+        print(f"--- ANALYSIS COMPLETE: {analysis_result} ---")
+
+    except Exception as e:
+        print(f"--- AI ANALYSIS FAILED: {e} ---")
+        analysis_result = f"Error during analysis: {e}"
+
+
+    # --- This WebSocket code is the same as before ---
     try:
         channel_layer = get_channel_layer()
-
-        # This sends the message to our 'AnalysisConsumer'
-        # The 'type' field ('send_analysis_result') must match
-        # the method name in our consumer.
         async_to_sync(channel_layer.group_send)(
-            "analysis_group",  # This is the name of our consumer (we need to set this)
+            "analysis_group",
             {
-                "type": "send.analysis.result",  # This maps to send_analysis_result
+                "type": "send_analysis_result",
                 "message": analysis_result,
             },
         )
-        print("--- Result sent to WebSocket ---")
+        print("--- Result sent to WebSocket group ---")
     except Exception as e:
         print(f"--- FAILED TO SEND TO WEBSOCKET: {e} ---")
 

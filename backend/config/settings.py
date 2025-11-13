@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-fe$=a@q(n)9gj&1hv5bc(_uryi1hd&%lhq!q_2zgr)tswotzdw'
+SECRET_KEY = '____'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -138,8 +138,8 @@ CORS_ALLOWED_ORIGINS = [
 
 # GitHub OAuth Configuration
 # IMPORTANT: Never share these keys or commit them to a public repo!
-GITHUB_CLIENT_ID = 'Client_id'
-GITHUB_CLIENT_SECRET = 'secret'
+GITHUB_CLIENT_ID = '___'
+GITHUB_CLIENT_SECRET = '___'
 
 
 # At the bottom of backend/config/settings.py
@@ -157,3 +157,13 @@ CHANNEL_LAYERS = {
         },
     },
 }
+# At the bottom of backend/config/settings.py
+
+GOOGLE_API_KEY = '___'
+
+
+# At the bottom of backend/config/settings.py
+
+GROQ_API_KEY = '___'
+
+
