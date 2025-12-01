@@ -254,4 +254,4 @@ If you want, I can also generate:
 ✔ A professional banner image
 ✔ A fully responsive dark-themed Readme design
 
-Just say **“Add TOC”** or **“Add badges”**.
+
