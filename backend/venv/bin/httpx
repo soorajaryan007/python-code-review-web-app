@@ -1,4 +1,4 @@
-#!/home/sooraj/CodeSentry/backend/venv/bin/python3
+#!/home/sooraj/python-code-review-web-app/backend/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

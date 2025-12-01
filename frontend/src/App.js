@@ -137,42 +137,106 @@ function UserDashboard({ token }) {
     return <p>Loading dashboard...</p>;
   }
 
-  // Render State 3: A file is selected
-  if (selectedFile) {
-    return (
-      <div style={{ textAlign: 'left', width: '90%' }}>
-        <button onClick={handleBackToFiles} style={{ marginBottom: '10px' }}>&larr; Back to Files</button>
-        <h3>{selectedFile.name}</h3>
-        <div>
-          <button
-            onClick={handleAnalyzeClick}
-            disabled={isAnalyzing}
-            style={{ marginBottom: '10px', background: '#007bff', color: 'white', padding: '8px', border: 'none', borderRadius: '5px' }}
-          >
-            {isAnalyzing ? 'Analyzing...' : 'Analyze File'}
-          </button>
 
-          {/* This section shows the loading/result messages */}
+// Render State 3: A file is selected
+
+
+const showAnalysisPanel = () => {
+  return isAnalyzing || analysisResult;
+};
+if (selectedFile) {
+  return (
+    <div style={{ textAlign: 'left', width: '95%' }}>
+      <button onClick={handleBackToFiles} style={{ marginBottom: '10px' }}>
+        &larr; Back to Files
+      </button>
+
+      <h3>{selectedFile.name}</h3>
+
+      {/* ANALYZE BUTTON */}
+      <button
+        onClick={handleAnalyzeClick}
+        disabled={isAnalyzing}
+        style={{
+          marginBottom: '10px',
+          background: '#007bff',
+          color: 'white',
+          padding: '8px',
+          border: 'none',
+          borderRadius: '5px'
+        }}
+      >
+        {isAnalyzing ? 'Analyzing...' : 'Analyze File'}
+      </button>
+
+      {/* --- NEW GRID LAYOUT --- */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '20px',
+          marginTop: '20px'
+        }}
+      >
+
+        {/* LEFT PANEL — CODE */}
+        <div
+          style={{
+            background: '#1e1e1e',
+            padding: '10px',
+            borderRadius: '8px',
+            overflowY: 'auto',
+            maxHeight: '80vh'
+          }}
+        >
+          <h4 style={{ color: '#ccc' }}>Code</h4>
+          <SyntaxHighlighter
+            language="python"
+            style={vscDarkPlus}
+            showLineNumbers
+          >
+            {fileContent}
+          </SyntaxHighlighter>
+        </div>
+
+        {/* RIGHT PANEL — AI RESULT */}
+        <div
+          style={{
+            background: '#0f5132',
+            padding: '10px',
+            borderRadius: '8px',
+            color: 'white',
+            overflowY: 'auto',
+            maxHeight: '80vh',
+            display: showAnalysisPanel() ? 'block' : 'none'
+          }}
+        >
+          <h4>AI Result</h4>
+
           {isAnalyzing && (
-            <div style={{ padding: '10px', background: '#333', borderRadius: '5px', margin: '10px 0' }}>
-              <p>Waiting for analysis result...</p>
+            <div style={{ padding: '10px', background: '#333', borderRadius: '5px' }}>
+              <p>Waiting for analysis...</p>
             </div>
           )}
 
           {analysisResult && (
-            <div style={{ padding: '10px', background: '#28a745', color: 'white', borderRadius: '5px', margin: '10px 0' }}>
-              <strong>AI Result:</strong> {analysisResult}
+            <div
+              style={{
+                background: '#198754',
+                padding: '10px',
+                borderRadius: '6px',
+                marginTop: '10px'
+              }}
+            >
+              {analysisResult}
             </div>
           )}
-
-          {/* This is the code viewer */}
-          <SyntaxHighlighter language="python" style={vscDarkPlus} showLineNumbers>
-            {fileContent}
-          </SyntaxHighlighter>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   // Render State 2: A repo is selected
   if (selectedRepo) {
