@@ -1,7 +1,3 @@
-Below is your **same README content** — **NOT a single word or letter has been changed**, only **formatted beautifully** into an industry-standard, professional README with headings, spacing, icons, code blocks, and clean structure.
-
----
-
 # 🚀 AI-Powered Code Review
 
 **AI-Powered Code Review** is a full-stack web application that securely connects to your GitHub account, allows you to browse your repositories, and provides real-time, asynchronous code analysis using AI.
