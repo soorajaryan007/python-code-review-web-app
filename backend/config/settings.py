@@ -136,17 +136,7 @@ CORS_ALLOWED_ORIGINS = [
 
 # At the bottom of backend/config/settings.py
 
-# GitHub OAuth Configuration
-# IMPORTANT: Never share these keys or commit them to a public repo!
-GITHUB_CLIENT_ID = '___'
-GITHUB_CLIENT_SECRET = '___'
 
-
-# At the bottom of backend/config/settings.py
-
-# --- Celery Configuration ---
-# This is the URL of our RabbitMQ server
-CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
 
 # Add this new setting at the VERY BOTTOM of the file
 CHANNEL_LAYERS = {
@@ -157,13 +147,13 @@ CHANNEL_LAYERS = {
         },
     },
 }
-# At the bottom of backend/config/settings.py
+from decouple import config
 
-GOOGLE_API_KEY = '___'
+GITHUB_CLIENT_ID = config('GITHUB_CLIENT_ID')
+GITHUB_CLIENT_SECRET = config('GITHUB_CLIENT_SECRET')
+GROQ_API_KEY = config('GROQ_API_KEY')
 
-
-# At the bottom of backend/config/settings.py
-
-GROQ_API_KEY = '___'
-
+# --- Celery Configuration ---
+# This is the URL of our RabbitMQ server
+CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
 

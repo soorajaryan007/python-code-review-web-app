@@ -29,11 +29,14 @@ CodeSentry - AI-Powered Code ReviewCodeSentry is a full-stack web application th
     E -- 12. WebSocket Push --> B
     B -- 13. WebSocket Push --> A
 
-✨ FeaturesSecure GitHub Login: Authenticates users via the GitHub OAuth2 flow.Repository Browser: Fetches and displays a user's repositories, including files and folder structure.Code Viewer: Renders file content with syntax highlighting.Asynchronous AI Analysis: Uses Celery and RabbitMQ to run AI code reviews in a background task, so the UI is never blocked.Real-time Results: Uses Django Channels and Redis to push the analysis results to the user over a WebSocket the moment they are ready.💻 Tech StackFrontend: React, React Hooks, react-syntax-highlighter, atobBackend: Python, Django, Django REST Framework, Django ChannelsAsync & Real-time: Celery, RabbitMQ, Redis, WebSocketsDatabase: SQLite (default for development)AI: Groq API (using the Llama 3, Mixtral, or Gemma models)Auth: GitHub OAuthInfrastructure: Docker (for RabbitMQ and Redis)⚖️ LicenseThis project is licensed under the MIT License - see the LICENSE.txt file for details.🛠️ Setup & InstallationBefore you begin, you must have Docker installed and running on your system.1. Clone the Repositorygit clone [https://github.com/your-username/CodeSentry.git](https://github.com/your-username/CodeSentry.git)
-cd CodeSentry
+✨ FeaturesSecure GitHub Login: Authenticates users via the GitHub OAuth2 flow.Repository Browser: Fetches and displays a user's repositories, including files and folder structure.Code Viewer: Renders file content with syntax highlighting.Asynchronous AI Analysis: Uses Celery and RabbitMQ to run AI code reviews in a background task, so the UI is never blocked.Real-time Results: Uses Django Channels and Redis to push the analysis results to the user over a WebSocket the moment they are ready.💻 Tech StackFrontend: React, React Hooks, react-syntax-highlighter, atobBackend: Python, Django, Django REST Framework, Django ChannelsAsync & Real-time: Celery, RabbitMQ, Redis, WebSocketsDatabase: SQLite (default for development)AI: Groq API (using the Llama 3, Mixtral, or Gemma models)Auth: GitHub OAuthInfrastructure: Docker (for RabbitMQ and Redis)⚖️ LicenseThis project is licensed under the MIT License - see the LICENSE.txt file for details.🛠️ Setup & InstallationBefore you begin, you must have Docker installed and running on your system.1. Clone the Repositorygit clone [https://github.com/soorajaryan007/python-code-review-web-app.git](https://github.com/soorajaryan007/python-code-review-web-app.git)
 
-2. Backend SetupFirst, let's set up the Django backend and its dependencies.# Navigate to the backend directory
-cd backend
+# In terminal
+cd python-code-review-web-app
+
+2. Backend Setup First, let's set up the Django backend and its dependencies.
+# Navigate to the backend directory
+cd backend  (it will look like : python-code-review-web-app/backend )
 
 # Create a Python virtual environment
 python3 -m venv venv

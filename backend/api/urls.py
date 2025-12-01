@@ -1,10 +1,5 @@
 # In backend/api/urls.py
 # In backend/config/urls.py
-# In backend/config/urls.py
-
-# In backend/api/urls.py
-
-# In backend/api/urls.py
 
 from django.urls import path
 # Make sure GitHubLoginView is imported

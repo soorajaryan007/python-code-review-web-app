@@ -3,6 +3,14 @@ import './App.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import atob from 'atob';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter2 } from "react-syntax-highlighter";
+import { vscDarkPlus as aiHighlightTheme } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+
+
+
 
 // --- UserDashboard Component ---
 // This is the main view after login
@@ -21,6 +29,8 @@ function UserDashboard({ token }) {
 
   const [analysisResult, setAnalysisResult] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentPath, setCurrentPath] = useState('');
+
 
   // Effect to fetch user and repo data
   useEffect(() => {
@@ -65,6 +75,8 @@ function UserDashboard({ token }) {
   const onRepoClick = async (repoName) => {
     setLoadingFiles(true);
     setSelectedRepo(repoName);
+    setCurrentPath('');
+
     try {
       // Fetches the root directory of the repo
       const contentsResponse = await fetch(
@@ -77,25 +89,41 @@ function UserDashboard({ token }) {
     setLoadingFiles(false);
   };
 
-  const onFileClick = async (file) => {
-    if (file.type === 'dir') {
-      alert("Directory navigation not implemented yet.");
-      return;
-    }
-    setLoadingFileContent(true);
-    setSelectedFile(file);
+const onFileClick = async (file) => {
+  // If it's a folder, open inside it
+  if (file.type === "dir") {
     try {
-      // Fetches the specific file's content
-      const fileResponse = await fetch(file.url, {
-         headers: { Authorization: `Bearer ${token}` }
-      });
-      const fileData = await fileResponse.json();
-      // Content from GitHub API is base64 encoded, so we must decode it
-      const decodedContent = atob(fileData.content);
-      setFileContent(decodedContent);
-    } catch (error) { console.error('Error fetching file content:', error); }
-    setLoadingFileContent(false);
-  };
+      const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      setCurrentPath(newPath);
+
+      const folderResponse = await fetch(
+        `https://api.github.com/repos/${userData.login}/${selectedRepo}/contents/${newPath}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const folderData = await folderResponse.json();
+      setRepoFiles(folderData);
+    } catch (error) {
+      console.error("Error navigating folder:", error);
+    }
+    return;
+  }
+
+  // If it's a file → show content
+  setLoadingFileContent(true);
+  setSelectedFile(file);
+  try {
+    const fileResponse = await fetch(file.url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const fileData = await fileResponse.json();
+    const decodedContent = atob(fileData.content);
+    setFileContent(decodedContent);
+  } catch (error) {
+    console.error("Error fetching file content:", error);
+  }
+  setLoadingFileContent(false);
+};
+
 
   const handleBackToRepos = () => {
     setSelectedRepo(null);
@@ -137,42 +165,131 @@ function UserDashboard({ token }) {
     return <p>Loading dashboard...</p>;
   }
 
-  // Render State 3: A file is selected
-  if (selectedFile) {
-    return (
-      <div style={{ textAlign: 'left', width: '90%' }}>
-        <button onClick={handleBackToFiles} style={{ marginBottom: '10px' }}>&larr; Back to Files</button>
-        <h3>{selectedFile.name}</h3>
-        <div>
-          <button
-            onClick={handleAnalyzeClick}
-            disabled={isAnalyzing}
-            style={{ marginBottom: '10px', background: '#007bff', color: 'white', padding: '8px', border: 'none', borderRadius: '5px' }}
+
+// Render State 3: A file is selected
+
+
+const showAnalysisPanel = () => {
+  return isAnalyzing || analysisResult;
+};
+if (selectedFile) {
+  return (
+    <div style={{ textAlign: 'left', width: '95%' }}>
+      <button onClick={handleBackToFiles} style={{ marginBottom: '10px' }}>
+        &larr; Back to Files
+      </button>
+
+      <h3>{selectedFile.name}</h3>
+
+      {/* ANALYZE BUTTON */}
+      <button
+        onClick={handleAnalyzeClick}
+        disabled={isAnalyzing}
+        style={{
+          marginBottom: '10px',
+          background: '#007bff',
+          color: 'white',
+          padding: '8px',
+          border: 'none',
+          borderRadius: '5px'
+        }}
+      >
+        {isAnalyzing ? 'Analyzing...' : 'Analyze File'}
+      </button>
+
+      {/* --- NEW GRID LAYOUT --- */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '20px',
+          marginTop: '20px'
+        }}
+      >
+
+        {/* LEFT PANEL — CODE */}
+        <div
+          style={{
+            background: '#1e1e1e',
+            padding: '10px',
+            borderRadius: '8px',
+            overflowY: 'auto',
+            maxHeight: '80vh'
+          }}
+        >
+          <h4 style={{ color: '#ccc' }}>Code</h4>
+          <SyntaxHighlighter
+            language="python"
+            style={vscDarkPlus}
+            showLineNumbers
           >
-            {isAnalyzing ? 'Analyzing...' : 'Analyze File'}
-          </button>
-
-          {/* This section shows the loading/result messages */}
-          {isAnalyzing && (
-            <div style={{ padding: '10px', background: '#333', borderRadius: '5px', margin: '10px 0' }}>
-              <p>Waiting for analysis result...</p>
-            </div>
-          )}
-
-          {analysisResult && (
-            <div style={{ padding: '10px', background: '#28a745', color: 'white', borderRadius: '5px', margin: '10px 0' }}>
-              <strong>AI Result:</strong> {analysisResult}
-            </div>
-          )}
-
-          {/* This is the code viewer */}
-          <SyntaxHighlighter language="python" style={vscDarkPlus} showLineNumbers>
             {fileContent}
           </SyntaxHighlighter>
         </div>
+
+        {/* RIGHT PANEL — AI RESULT */}
+        <div
+          style={{
+            background: '#0f5132',
+            padding: '10px',
+            borderRadius: '8px',
+            color: 'white',
+            overflowY: 'auto',
+            maxHeight: '80vh',
+            display: showAnalysisPanel() ? 'block' : 'none'
+          }}
+        >
+          <h4>AI Result</h4>
+
+          {isAnalyzing && (
+            <div style={{ padding: '10px', background: '#333', borderRadius: '5px' }}>
+              <p>Waiting for analysis...</p>
+            </div>
+          )}
+
+{analysisResult && (
+  <div
+    style={{
+      background: '#198754',
+      padding: '10px',
+      borderRadius: '6px',
+      marginTop: '10px',
+      color: 'white'
+    }}
+  >
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ node, inline, className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || "");
+          return !inline && match ? (
+            <SyntaxHighlighter2
+              style={aiHighlightTheme}
+              language={match[1]}
+              PreTag="div"
+              {...props}
+            >
+              {String(children).replace(/\n$/, "")}
+            </SyntaxHighlighter2>
+          ) : (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        }
+      }}
+    >
+      {analysisResult}
+    </ReactMarkdown>
+  </div>
+)}
+
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   // Render State 2: A repo is selected
   if (selectedRepo) {

@@ -1,7 +1,10 @@
 # In backend/config/celery.py
-
+import environ
 import os
 from celery import Celery
+
+env = environ.Env()
+environ.Env.read_env()  # This loads the .env file
 
 # Set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
