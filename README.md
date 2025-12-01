@@ -38,22 +38,20 @@ A background process that picks up jobs from RabbitMQ, calls the AI, and publish
 
 ---
 
-```mermaid
-graph TD
     subgraph User's Computer
-        A[🌐 Browser @ localhost:3000\n(React App)]
+        A[🌐 Browser @ localhost:3000<br>(React App)]
     end
     
     subgraph Server-Side Services
-        B[🐍 Django Server @ localhost:8000\n(Daphne - ASGI)]
-        C[🐇 Celery Worker\n(Background Process)]
-        D[🐰 RabbitMQ\n(Message Queue)]
-        E[♦️ Redis\n(Channel Layer)]
+        B[🐍 Django Server @ localhost:8000<br>(Daphne - ASGI)]
+        C[🐇 Celery Worker<br>(Background Process)]
+        D[🐰 RabbitMQ<br>(Message Queue)]
+        E[♦️ Redis<br>(Channel Layer)]
     end
     
     subgraph External APIs
-        F[🐙 GitHub API\n(OAuth & Repo Data)]
-        G[🤖 Groq AI API\n(Code Analysis)]
+        F[🐙 GitHub API<br>(OAuth & Repo Data)]
+        G[🤖 Groq AI API<br>(Code Analysis)]
     end
     
     A -- 1. Login --> F
@@ -69,7 +67,6 @@ graph TD
     C -- 11. Send Result --> E
     E -- 12. WebSocket Push --> B
     B -- 13. WebSocket Push --> A
-```
 
 ---
 
