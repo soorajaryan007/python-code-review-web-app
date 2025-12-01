@@ -3,6 +3,14 @@ import './App.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import atob from 'atob';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter2 } from "react-syntax-highlighter";
+import { vscDarkPlus as aiHighlightTheme } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+
+
+
 
 // --- UserDashboard Component ---
 // This is the main view after login
@@ -21,6 +29,8 @@ function UserDashboard({ token }) {
 
   const [analysisResult, setAnalysisResult] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentPath, setCurrentPath] = useState('');
+
 
   // Effect to fetch user and repo data
   useEffect(() => {
@@ -65,6 +75,8 @@ function UserDashboard({ token }) {
   const onRepoClick = async (repoName) => {
     setLoadingFiles(true);
     setSelectedRepo(repoName);
+    setCurrentPath('');
+
     try {
       // Fetches the root directory of the repo
       const contentsResponse = await fetch(
@@ -77,25 +89,41 @@ function UserDashboard({ token }) {
     setLoadingFiles(false);
   };
 
-  const onFileClick = async (file) => {
-    if (file.type === 'dir') {
-      alert("Directory navigation not implemented yet.");
-      return;
-    }
-    setLoadingFileContent(true);
-    setSelectedFile(file);
+const onFileClick = async (file) => {
+  // If it's a folder, open inside it
+  if (file.type === "dir") {
     try {
-      // Fetches the specific file's content
-      const fileResponse = await fetch(file.url, {
-         headers: { Authorization: `Bearer ${token}` }
-      });
-      const fileData = await fileResponse.json();
-      // Content from GitHub API is base64 encoded, so we must decode it
-      const decodedContent = atob(fileData.content);
-      setFileContent(decodedContent);
-    } catch (error) { console.error('Error fetching file content:', error); }
-    setLoadingFileContent(false);
-  };
+      const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      setCurrentPath(newPath);
+
+      const folderResponse = await fetch(
+        `https://api.github.com/repos/${userData.login}/${selectedRepo}/contents/${newPath}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const folderData = await folderResponse.json();
+      setRepoFiles(folderData);
+    } catch (error) {
+      console.error("Error navigating folder:", error);
+    }
+    return;
+  }
+
+  // If it's a file → show content
+  setLoadingFileContent(true);
+  setSelectedFile(file);
+  try {
+    const fileResponse = await fetch(file.url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const fileData = await fileResponse.json();
+    const decodedContent = atob(fileData.content);
+    setFileContent(decodedContent);
+  } catch (error) {
+    console.error("Error fetching file content:", error);
+  }
+  setLoadingFileContent(false);
+};
+
 
   const handleBackToRepos = () => {
     setSelectedRepo(null);
@@ -219,18 +247,43 @@ if (selectedFile) {
             </div>
           )}
 
-          {analysisResult && (
-            <div
-              style={{
-                background: '#198754',
-                padding: '10px',
-                borderRadius: '6px',
-                marginTop: '10px'
-              }}
+{analysisResult && (
+  <div
+    style={{
+      background: '#198754',
+      padding: '10px',
+      borderRadius: '6px',
+      marginTop: '10px',
+      color: 'white'
+    }}
+  >
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ node, inline, className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || "");
+          return !inline && match ? (
+            <SyntaxHighlighter2
+              style={aiHighlightTheme}
+              language={match[1]}
+              PreTag="div"
+              {...props}
             >
-              {analysisResult}
-            </div>
-          )}
+              {String(children).replace(/\n$/, "")}
+            </SyntaxHighlighter2>
+          ) : (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        }
+      }}
+    >
+      {analysisResult}
+    </ReactMarkdown>
+  </div>
+)}
+
         </div>
       </div>
     </div>
