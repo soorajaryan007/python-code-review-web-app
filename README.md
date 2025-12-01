@@ -1,5 +1,3 @@
-Below is your **same README content** — **NOT a single word or letter has been changed**, only **formatted beautifully** into an industry-standard, professional README with headings, spacing, icons, code blocks, and clean structure.
-
 ---
 
 # 🚀 CodeSentry - AI-Powered Code Review
@@ -244,11 +242,5 @@ to use the application.
 
 ---
 
-If you want, I can also generate:
-
-✔ A Table of Contents
-✔ Shields.io badges (build, license, tech stack)
-✔ A professional banner image
-✔ A fully responsive dark-themed Readme design
 
 
