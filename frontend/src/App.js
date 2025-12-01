@@ -1,405 +1,377 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import atob from 'atob';
+import React, { useState, useEffect } from "react";
+import "./App.css";
+
+// Code syntax highlighting
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+// Markdown → React renderer
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter2 } from "react-syntax-highlighter";
-import { vscDarkPlus as aiHighlightTheme } from "react-syntax-highlighter/dist/esm/styles/prism";
 
+// Highlighting for AI-generated code blocks
+import { Prism as SyntaxAI } from "react-syntax-highlighter";
+import { vscDarkPlus as aiTheme } from "react-syntax-highlighter/dist/esm/styles/prism";
 
+// GitHub file content base64 decoding
+import atob from "atob";
 
+// --------------------------------------------------
+// MAIN USER DASHBOARD
+// --------------------------------------------------
 
-
-// --- UserDashboard Component ---
-// This is the main view after login
 function UserDashboard({ token }) {
   const [userData, setUserData] = useState(null);
   const [repos, setRepos] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [selectedRepo, setSelectedRepo] = useState(null);
   const [repoFiles, setRepoFiles] = useState([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
-  const [fileContent, setFileContent] = useState('');
-  const [loadingFileContent, setLoadingFileContent] = useState(false);
+  const [fileContent, setFileContent] = useState("");
 
-  const [analysisResult, setAnalysisResult] = useState('');
+  const [analysisResult, setAnalysisResult] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentPath, setCurrentPath] = useState('');
 
+  const [currentPath, setCurrentPath] = useState("");
 
-  // Effect to fetch user and repo data
+  // ---------------------------
+  // FETCH USER + REPOS
+  // ---------------------------
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    async function fetchData() {
       try {
-        const userResponse = await fetch('https://api.github.com/user', {
-          headers: { Authorization: `Bearer ${token}` }
+        const userResponse = await fetch("https://api.github.com/user", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        const userData = await userResponse.json();
-        setUserData(userData);
-        const repoResponse = await fetch('https://api.github.com/user/repos', {
-          headers: { Authorization: `Bearer ${token}` }
+        const userJson = await userResponse.json();
+        setUserData(userJson);
+
+        const repoResponse = await fetch("https://api.github.com/user/repos", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        const repoData = await repoResponse.json();
-        setRepos(repoData);
-      } catch (error) { console.error('Error fetching data:', error); }
-      setLoading(false);
-    };
+        const repoJson = await repoResponse.json();
+        setRepos(repoJson);
+      } catch (err) {
+        console.error("GitHub fetch error:", err);
+      }
+    }
     fetchData();
   }, [token]);
 
-  // Effect to set up WebSocket
+  // ---------------------------
+  // SETUP WEBSOCKET
+  // ---------------------------
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/analysis/');
-    ws.onopen = () => console.log('WebSocket connected!');
-    ws.onclose = () => console.log('WebSocket disconnected.');
+    const ws = new WebSocket("ws://localhost:8000/ws/analysis/");
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'analysis_result') {
+      if (data.type === "analysis_result") {
         setAnalysisResult(data.message);
         setIsAnalyzing(false);
       }
     };
 
     return () => ws.close();
-  }, []); // The empty [] means this runs only once
+  }, []);
 
-  // --- Click Handlers ---
+  // --------------------------------------------------
+  // GITHUB FILE + FOLDER NAVIGATION
+  // --------------------------------------------------
 
   const onRepoClick = async (repoName) => {
-    setLoadingFiles(true);
     setSelectedRepo(repoName);
-    setCurrentPath('');
+    setCurrentPath("");
 
-    try {
-      // Fetches the root directory of the repo
-      const contentsResponse = await fetch(
-        `https://api.github.com/repos/${userData.login}/${repoName}/contents/`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const contentsData = await contentsResponse.json();
-      setRepoFiles(contentsData);
-    } catch (error) { console.error('Error fetching repo contents:', error); }
-    setLoadingFiles(false);
+    const res = await fetch(
+      `https://api.github.com/repos/${userData.login}/${repoName}/contents/`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json = await res.json();
+    setRepoFiles(json);
   };
 
-const onFileClick = async (file) => {
-  // If it's a folder, open inside it
-  if (file.type === "dir") {
-    try {
+  const onFileClick = async (file) => {
+    if (file.type === "dir") {
       const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
       setCurrentPath(newPath);
 
-      const folderResponse = await fetch(
+      const res = await fetch(
         `https://api.github.com/repos/${userData.login}/${selectedRepo}/contents/${newPath}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const folderData = await folderResponse.json();
-      setRepoFiles(folderData);
-    } catch (error) {
-      console.error("Error navigating folder:", error);
+      const json = await res.json();
+      setRepoFiles(json);
+      return;
     }
-    return;
-  }
 
-  // If it's a file → show content
-  setLoadingFileContent(true);
-  setSelectedFile(file);
-  try {
-    const fileResponse = await fetch(file.url, {
-      headers: { Authorization: `Bearer ${token}` }
+    // Load file content
+    setSelectedFile(file);
+    const res = await fetch(file.url, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    const fileData = await fileResponse.json();
-    const decodedContent = atob(fileData.content);
-    setFileContent(decodedContent);
-  } catch (error) {
-    console.error("Error fetching file content:", error);
-  }
-  setLoadingFileContent(false);
-};
-
-
-  const handleBackToRepos = () => {
-    setSelectedRepo(null);
-    setRepoFiles([]);
+    const json = await res.json();
+    setFileContent(atob(json.content));
   };
 
-  const handleBackToFiles = () => {
-    setSelectedFile(null);
-    setFileContent('');
-    setAnalysisResult(''); // Clear analysis on back
-  };
+  // --------------------------------------------------
+  // AI ANALYSIS (HTTP + WebSocket result)
+  // --------------------------------------------------
 
   const handleAnalyzeClick = async () => {
-    setAnalysisResult('');
+    setAnalysisResult("");
     setIsAnalyzing(true);
-    try {
-      // Call our Django backend to start the task
-      const response = await fetch('http://127.0.0.1:8000/api/analyze/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: fileContent })
-      });
-      const data = await response.json();
-      if (response.status !== 202) { // 202 Accepted
-        alert(`Error: ${data.error}`);
-        setIsAnalyzing(false);
-      }
-      // If successful (202), we just wait. The WebSocket will deliver the result.
-    } catch (error) {
-      console.error('Error starting analysis:', error);
-      alert('Failed to start analysis.');
+
+    const res = await fetch("http://127.0.0.1:8000/api/analyze/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: fileContent }),
+    });
+
+    const data = await res.json();
+
+    if (res.status !== 202) {
+      alert(data.error);
       setIsAnalyzing(false);
     }
   };
 
-  // --- Render Logic ---
+  // --------------------------------------------------
+  // PARSE AI MARKDOWN → extract code blocks
+  // --------------------------------------------------
 
-  if (loading) {
-    return <p>Loading dashboard...</p>;
+  function extractCodeBlocks(markdown) {
+    const regex = /```(\w+)?\n([\s\S]*?)```/g;
+    let match;
+    const result = [];
+
+    while ((match = regex.exec(markdown)) !== null) {
+      result.push({
+        language: match[1] || "text",
+        code: match[2],
+      });
+    }
+    return result;
   }
 
+  // --------------------------------------------------
+  // UI SECTIONS
+  // --------------------------------------------------
 
-// Render State 3: A file is selected
+  if (!userData) return <p>Loading...</p>;
 
+  // ---------------------------
+  // FILE VIEW + ANALYSIS PANEL
+  // ---------------------------
+  if (selectedFile) {
+    const showPanel = isAnalyzing || analysisResult;
+    const codeBlocks = extractCodeBlocks(analysisResult);
+    const explanation = analysisResult.replace(/```[\s\S]*?```/g, "").trim();
 
-const showAnalysisPanel = () => {
-  return isAnalyzing || analysisResult;
-};
-if (selectedFile) {
-  return (
-    <div style={{ textAlign: 'left', width: '95%' }}>
-      <button onClick={handleBackToFiles} style={{ marginBottom: '10px' }}>
-        &larr; Back to Files
-      </button>
-
-      <h3>{selectedFile.name}</h3>
-
-      {/* ANALYZE BUTTON */}
-      <button
-        onClick={handleAnalyzeClick}
-        disabled={isAnalyzing}
-        style={{
-          marginBottom: '10px',
-          background: '#007bff',
-          color: 'white',
-          padding: '8px',
-          border: 'none',
-          borderRadius: '5px'
-        }}
-      >
-        {isAnalyzing ? 'Analyzing...' : 'Analyze File'}
-      </button>
-
-      {/* --- NEW GRID LAYOUT --- */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '20px',
-          marginTop: '20px'
-        }}
-      >
-
-        {/* LEFT PANEL — CODE */}
-        <div
-          style={{
-            background: '#1e1e1e',
-            padding: '10px',
-            borderRadius: '8px',
-            overflowY: 'auto',
-            maxHeight: '80vh'
-          }}
-        >
-          <h4 style={{ color: '#ccc' }}>Code</h4>
-          <SyntaxHighlighter
-            language="python"
-            style={vscDarkPlus}
-            showLineNumbers
-          >
-            {fileContent}
-          </SyntaxHighlighter>
-        </div>
-
-        {/* RIGHT PANEL — AI RESULT */}
-        <div
-          style={{
-            background: '#0f5132',
-            padding: '10px',
-            borderRadius: '8px',
-            color: 'white',
-            overflowY: 'auto',
-            maxHeight: '80vh',
-            display: showAnalysisPanel() ? 'block' : 'none'
-          }}
-        >
-          <h4>AI Result</h4>
-
-          {isAnalyzing && (
-            <div style={{ padding: '10px', background: '#333', borderRadius: '5px' }}>
-              <p>Waiting for analysis...</p>
-            </div>
-          )}
-
-{analysisResult && (
-  <div
-    style={{
-      background: '#198754',
-      padding: '10px',
-      borderRadius: '6px',
-      marginTop: '10px',
-      color: 'white'
-    }}
-  >
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ node, inline, className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || "");
-          return !inline && match ? (
-            <SyntaxHighlighter2
-              style={aiHighlightTheme}
-              language={match[1]}
-              PreTag="div"
-              {...props}
-            >
-              {String(children).replace(/\n$/, "")}
-            </SyntaxHighlighter2>
-          ) : (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          );
-        }
-      }}
-    >
-      {analysisResult}
-    </ReactMarkdown>
-  </div>
-)}
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-  // Render State 2: A repo is selected
-  if (selectedRepo) {
     return (
-      <div style={{ textAlign: 'left', width: '80%' }}>
-        <button onClick={handleBackToRepos} style={{ marginBottom: '10px' }}>&larr; Back to Repos</button>
-        <h3>{selectedRepo}</h3>
-        {loadingFiles ? (
-          <p>Loading files...</p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0, cursor: 'pointer' }}>
-            {repoFiles.map(file => (
-              <li
-                key={file.sha}
-                onClick={() => onFileClick(file)}
-                style={{ background: '#333', margin: '5px', padding: '10px', borderRadius: '5px', transition: 'background 0.2s' }}
-                onMouseOver={e => e.currentTarget.style.background = '#555'}
-                onMouseOut={e => e.currentTarget.style.background = '#333'}
-              >
-                {file.type === 'dir' ? '📁' : '📄'} {file.name}
-              </li>
-            ))}
-          </ul>
-        )}
+      <div style={{ width: "95%", textAlign: "left" }}>
+        <button onClick={() => setSelectedFile(null)}>&larr; Back</button>
+        <h3>{selectedFile.name}</h3>
+
+        <button
+          onClick={handleAnalyzeClick}
+          disabled={isAnalyzing}
+          style={{ margin: "10px 0" }}
+        >
+          {isAnalyzing ? "Analyzing..." : "Analyze File"}
+        </button>
+
+        {/* GRID */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "20px",
+            marginTop: "20px",
+          }}
+        >
+          {/* LEFT — CODE */}
+          <div
+            style={{
+              background: "#1e1e1e",
+              padding: 10,
+              borderRadius: 8,
+              maxHeight: "80vh",
+              overflow: "auto",
+            }}
+          >
+            <h4>Code</h4>
+            <SyntaxHighlighter
+              language="python"
+              style={vscDarkPlus}
+              showLineNumbers
+            >
+              {fileContent}
+            </SyntaxHighlighter>
+          </div>
+
+          {/* RIGHT — AI RESULT */}
+          <div
+            style={{
+              background: "#0f5132",
+              padding: 10,
+              borderRadius: 8,
+              maxHeight: "80vh",
+              overflow: "auto",
+              display: showPanel ? "block" : "none",
+              color: "white",
+            }}
+          >
+            <h4>AI Result</h4>
+
+            {isAnalyzing && <p>Waiting for analysis…</p>}
+
+            {analysisResult && (
+              <div>
+                {/* Explanation */}
+                <h4>Explanation</h4>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {explanation}
+                </ReactMarkdown>
+
+                <button
+                  onClick={() => navigator.clipboard.writeText(explanation)}
+                  style={{ marginBottom: 20 }}
+                >
+                  Copy Explanation
+                </button>
+
+                <hr />
+
+                {/* Code Blocks */}
+                {codeBlocks.map((block, i) => (
+                  <div key={i} style={{ marginBottom: 20 }}>
+                    <SyntaxAI style={aiTheme} language={block.language}>
+                      {block.code}
+                    </SyntaxAI>
+
+                    <button
+                      onClick={() => navigator.clipboard.writeText(block.code)}
+                      style={{ marginTop: 5 }}
+                    >
+                      Copy Code
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Render State 1: No repo selected (the repo list)
-  return (
-    <div style={{ textAlign: 'left', width: '80%' }}>
-      <h2>Welcome, {userData.login}!</h2>
-      <div>
-        <h3>Your Repositories</h3>
-        <ul style={{ listStyle: 'none', padding: 0, cursor: 'pointer' }}>
-          {repos.map(repo => (
+  // ---------------------------
+  // FILE LIST VIEW
+  // ---------------------------
+  if (selectedRepo) {
+    return (
+      <div style={{ width: "80%", textAlign: "left" }}>
+        <button onClick={() => setSelectedRepo(null)}>&larr; Back</button>
+        <h3>{selectedRepo}</h3>
+
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {repoFiles.map((f) => (
             <li
-              key={repo.id}
-              onClick={() => onRepoClick(repo.name)}
-              style={{ background: '#333', margin: '5px', padding: '10px', borderRadius: '5px', transition: 'background 0.2s' }}
-              onMouseOver={e => e.currentTarget.style.background = '#555'}
-              onMouseOut={e => e.currentTarget.style.background = '#333'}
+              key={f.sha}
+              onClick={() => onFileClick(f)}
+              style={{
+                cursor: "pointer",
+                background: "#333",
+                padding: 10,
+                borderRadius: 5,
+                margin: 5,
+              }}
             >
-              {repo.name}
+              {f.type === "dir" ? "📁" : "📄"} {f.name}
             </li>
           ))}
         </ul>
       </div>
+    );
+  }
+
+  // ---------------------------
+  // REPO LIST VIEW
+  // ---------------------------
+  return (
+    <div style={{ width: "80%", textAlign: "left" }}>
+      <h2>Welcome, {userData.login}</h2>
+      <h3>Your Repositories</h3>
+
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        {repos.map((repo) => (
+          <li
+            key={repo.id}
+            onClick={() => onRepoClick(repo.name)}
+            style={{
+              cursor: "pointer",
+              background: "#333",
+              padding: 10,
+              borderRadius: 5,
+              margin: 5,
+            }}
+          >
+            {repo.name}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
+// --------------------------------------------------
+// LOGIN COMPONENT
+// --------------------------------------------------
 
-// --- Login Component ---
-// This is the view before login
 function Login() {
-  const [clientId, setClientId] = useState('');
+  const [clientId, setClientId] = useState("");
 
   useEffect(() => {
-    // Fetches the GitHub Client ID from our backend
-    const fetchClientId = async () => {
-      try {
-        const response = await fetch('http://127.0.0.1:8000/api/auth/github/login/');
-        const data = await response.json();
-        setClientId(data.client_id);
-      } catch (error) {
-        console.error('Error fetching Client ID:', error);
-      }
-    };
-    fetchClientId();
+    fetch("http://127.0.0.1:8000/api/auth/github/login/")
+      .then((res) => res.json())
+      .then((data) => setClientId(data.client_id));
   }, []);
 
-  const githubLoginUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user%20repo`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user%20repo`;
 
   return (
     <div>
       <h1>CodeSentry</h1>
       {clientId ? (
-        <a className="github-login-button" href={githubLoginUrl}>
+        <a className="github-login-button" href={url}>
           Login with GitHub
         </a>
       ) : (
-        <p>Loading...</p>
+        <p>Loading…</p>
       )}
     </div>
   );
 }
 
-// --- App Component (Main) ---
-// This component decides whether to show Login or UserDashboard
-// --- THIS IS THE FIXED App FUNCTION ---
+// --------------------------------------------------
+// MAIN APP WRAPPER
+// --------------------------------------------------
+
 function App() {
   const [token, setToken] = useState(null);
 
   useEffect(() => {
-    // Check if a token is in the URL (from the OAuth redirect)
     const urlParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = urlParams.get('token');
+    const t = urlParams.get("token");
 
-    if (tokenFromUrl) {
-      setToken(tokenFromUrl);
-      localStorage.setItem('githubToken', tokenFromUrl);
-      // Clean the URL so the token isn't visible
+    if (t) {
+      setToken(t);
+      localStorage.setItem("githubToken", t);
       window.history.replaceState({}, document.title, window.location.pathname);
     } else {
-      // If no token in URL, check if one is saved in localStorage
-      const storedToken = localStorage.getItem('githubToken');
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      const saved = localStorage.getItem("githubToken");
+      if (saved) setToken(saved);
     }
   }, []);
 
@@ -407,31 +379,9 @@ function App() {
     <div className="App">
       <header className="App-header">
         {token ? <UserDashboard token={token} /> : <Login />}
-      </header> {/* <-- Corrected closing tag --> */}
+      </header>
     </div>
   );
 }
-
-// --- Styles ---
-// We inject these styles directly into the head for simplicity
-const styles = `
-.github-login-button {
-  background-color: #24292e;
-  color: white;
-  padding: 12px 20px;
-  text-decoration: none;
-  font-weight: bold;
-  border-radius: 6px;
-  font-size: 1.1em;
-  transition: background-color 0.2s;
-}
-.github-login-button:hover {
-  background-color: #444;
-}
-`;
-const styleSheet = document.createElement("style");
-styleSheet.type = "text/css";
-styleSheet.innerText = styles;
-document.head.appendChild(styleSheet);
 
 export default App;
