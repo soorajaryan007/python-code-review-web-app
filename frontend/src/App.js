@@ -1,23 +1,64 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
-// Code syntax highlighting
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-
-// Markdown → React renderer
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// Highlighting for AI-generated code blocks
-import { Prism as SyntaxAI } from "react-syntax-highlighter";
-import { vscDarkPlus as aiTheme } from "react-syntax-highlighter/dist/esm/styles/prism";
+// Monaco Editor
+import Editor from "@monaco-editor/react";
 
-// GitHub file content base64 decoding
+// Diff library
+import { diffLines } from "diff";
+
+// Base64 decoder
 import atob from "atob";
 
 // --------------------------------------------------
-// MAIN USER DASHBOARD
+// CUSTOM DIFF VIEWER (SIDE BY SIDE)
+// --------------------------------------------------
+
+function renderDiff(original, fixed) {
+  const diffs = diffLines(original, fixed);
+
+  return (
+    <div className="diff-container">
+      {/* LEFT PANEL — ORIGINAL */}
+      <div className="diff-panel">
+        {diffs.map((part, i) => (
+          <pre
+            key={i}
+            className={
+              part.removed
+                ? "diff-line-removed"
+                : "diff-line-normal"
+            }
+          >
+            {part.removed ? part.value : !part.added ? part.value : ""}
+          </pre>
+        ))}
+      </div>
+
+      {/* RIGHT PANEL — FIXED */}
+      <div className="diff-panel">
+        {diffs.map((part, i) => (
+          <pre
+            key={i}
+            className={
+              part.added
+                ? "diff-line-added"
+                : "diff-line-normal"
+            }
+          >
+            {part.added ? part.value : !part.removed ? part.value : ""}
+          </pre>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------
+// MAIN DASHBOARD
 // --------------------------------------------------
 
 function UserDashboard({ token }) {
@@ -30,37 +71,39 @@ function UserDashboard({ token }) {
   const [fileContent, setFileContent] = useState("");
 
   const [analysisResult, setAnalysisResult] = useState("");
+  const [fixedCode, setFixedCode] = useState("");
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
   const [currentPath, setCurrentPath] = useState("");
-  // Drag resize states (MUST be top-level hooks)
-const [leftWidth, setLeftWidth] = useState(50); // percentage
-const [isDragging, setIsDragging] = useState(false);
 
-const startDrag = () => setIsDragging(true);
-const stopDrag = () => setIsDragging(false);
+  const [leftWidth, setLeftWidth] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
 
-const handleDrag = (e) => {
-  if (!isDragging) return;
+  const [editor, setEditor] = useState(null);
+  const [monacoInstance, setMonacoInstance] = useState(null);
 
-  const container = document.getElementById("resize-container");
-  if (!container) return;
+  const startDrag = () => setIsDragging(true);
+  const stopDrag = () => setIsDragging(false);
 
-  const rect = container.getBoundingClientRect();
-  const x = e.clientX - rect.left;
+  const handleDrag = (e) => {
+    if (!isDragging) return;
+    const container = document.getElementById("resize-container");
+    if (!container) return;
 
-  let newWidth = (x / rect.width) * 100;
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    let newWidth = (x / rect.width) * 100;
 
-  if (newWidth < 15) newWidth = 15;
-  if (newWidth > 85) newWidth = 85;
+    if (newWidth < 15) newWidth = 15;
+    if (newWidth > 85) newWidth = 85;
 
-  setLeftWidth(newWidth);
-};
+    setLeftWidth(newWidth);
+  };
 
-
-  // ---------------------------
+  // --------------------------------------------------
   // FETCH USER + REPOS
-  // ---------------------------
+  // --------------------------------------------------
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -82,16 +125,23 @@ const handleDrag = (e) => {
     fetchData();
   }, [token]);
 
-  // ---------------------------
-  // SETUP WEBSOCKET
-  // ---------------------------
+  // --------------------------------------------------
+  // WEBSOCKET
+  // --------------------------------------------------
+
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:8000/ws/analysis/");
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
       if (data.type === "analysis_result") {
         setAnalysisResult(data.message);
+        setIsAnalyzing(false);
+      }
+
+      if (data.type === "fix_result") {
+        setFixedCode(data.message);
         setIsAnalyzing(false);
       }
     };
@@ -100,7 +150,7 @@ const handleDrag = (e) => {
   }, []);
 
   // --------------------------------------------------
-  // GITHUB FILE + FOLDER NAVIGATION
+  // NAVIGATION
   // --------------------------------------------------
 
   const onRepoClick = async (repoName) => {
@@ -111,8 +161,7 @@ const handleDrag = (e) => {
       `https://api.github.com/repos/${userData.login}/${repoName}/contents/`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    const json = await res.json();
-    setRepoFiles(json);
+    setRepoFiles(await res.json());
   };
 
   const onFileClick = async (file) => {
@@ -124,12 +173,10 @@ const handleDrag = (e) => {
         `https://api.github.com/repos/${userData.login}/${selectedRepo}/contents/${newPath}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const json = await res.json();
-      setRepoFiles(json);
+      setRepoFiles(await res.json());
       return;
     }
 
-    // Load file content
     setSelectedFile(file);
     const res = await fetch(file.url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -139,171 +186,196 @@ const handleDrag = (e) => {
   };
 
   // --------------------------------------------------
-  // AI ANALYSIS (HTTP + WebSocket result)
+  // ANALYZE FILE
   // --------------------------------------------------
 
   const handleAnalyzeClick = async () => {
     setAnalysisResult("");
+    setFixedCode("");
     setIsAnalyzing(true);
 
-    const res = await fetch("http://127.0.0.1:8000/api/analyze/", {
+    await fetch("http://127.0.0.1:8000/api/analyze/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: fileContent }),
     });
-
-    const data = await res.json();
-
-    if (res.status !== 202) {
-      alert(data.error);
-      setIsAnalyzing(false);
-    }
   };
 
   // --------------------------------------------------
-  // PARSE AI MARKDOWN → extract code blocks
+  // AUTO FIX FILE
   // --------------------------------------------------
 
-  function extractCodeBlocks(markdown) {
-    const regex = /```(\w+)?\n([\s\S]*?)```/g;
-    let match;
-    const result = [];
+  const handleFixClick = async () => {
+    setFixedCode("");
+    setIsAnalyzing(true);
 
-    while ((match = regex.exec(markdown)) !== null) {
-      result.push({
-        language: match[1] || "text",
-        code: match[2],
+    await fetch("http://127.0.0.1:8000/api/fix-file/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: fileContent }),
+    });
+  };
+
+  // --------------------------------------------------
+  // INLINE ISSUE PARSER
+  // --------------------------------------------------
+
+  function extractInlineIssues(text) {
+    const regex = /Line\s+(\d+):\s+(.*)/g;
+    let match;
+    const issues = [];
+
+    while ((match = regex.exec(text)) !== null) {
+      issues.push({
+        line: parseInt(match[1]),
+        message: match[2],
       });
     }
-    return result;
+    return issues;
   }
 
   // --------------------------------------------------
-  // UI SECTIONS
+  // APPLY MONACO DECORATIONS
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!analysisResult || !editor || !monacoInstance) return;
+
+    const issues = extractInlineIssues(analysisResult);
+
+    const decorations = issues.map((issue) => ({
+      range: new monacoInstance.Range(issue.line, 1, issue.line, 1),
+      options: {
+        isWholeLine: true,
+        className: "line-error-decoration",
+        hoverMessage: { value: issue.message },
+      },
+    }));
+
+    editor.deltaDecorations([], decorations);
+  }, [analysisResult, editor, monacoInstance]);
+
+  const handleEditorMount = (editorObj, monaco) => {
+    setEditor(editorObj);
+    setMonacoInstance(monaco);
+  };
+
+  // --------------------------------------------------
+  // RENDER FILE VIEW
   // --------------------------------------------------
 
   if (!userData) return <p>Loading...</p>;
 
-  // ---------------------------
-  // FILE VIEW + ANALYSIS PANEL
-  // ---------------------------
   if (selectedFile) {
-  const showPanel = isAnalyzing || analysisResult;
-  const codeBlocks = extractCodeBlocks(analysisResult);
-  const explanation = analysisResult.replace(/```[\s\S]*?```/g, "").trim();
+    const explanation = analysisResult.replace(/```[\s\S]*?```/g, "").trim();
+    const showPanel = isAnalyzing || analysisResult || fixedCode;
 
-  return (
-    <div style={{ width: "95%", textAlign: "left" }}>
-      <button onClick={() => setSelectedFile(null)}>&larr; Back</button>
-      <h3>{selectedFile.name}</h3>
+    return (
+      <div style={{ width: "95%", textAlign: "left" }}>
+        <button onClick={() => setSelectedFile(null)}>&larr; Back</button>
+        <h3>{selectedFile.name}</h3>
 
-      <button
-        onClick={handleAnalyzeClick}
-        disabled={isAnalyzing}
-        style={{ margin: "10px 0" }}
-      >
-        {isAnalyzing ? "Analyzing..." : "Analyze File"}
-      </button>
+        <button
+          onClick={handleAnalyzeClick}
+          disabled={isAnalyzing}
+          style={{ marginRight: 10 }}
+        >
+          {isAnalyzing ? "Analyzing…" : "Analyze File"}
+        </button>
 
-      {/* Resizable Container */}
-      <div
-        id="resize-container"
-        onMouseMove={handleDrag}
-        onMouseUp={stopDrag}
-        style={{
-          display: "flex",
-          height: "80vh",
-          border: "1px solid #333",
-          marginTop: 20,
-          userSelect: isDragging ? "none" : "auto",
-        }}
-      >
-        {/* LEFT PANEL — Code */}
+        <button
+          onClick={handleFixClick}
+          disabled={isAnalyzing}
+          style={{ background: "#0d6efd", color: "white" }}
+        >
+          ✨ Auto-Fix File
+        </button>
+
         <div
+          id="resize-container"
+          onMouseMove={handleDrag}
+          onMouseUp={stopDrag}
           style={{
-            width: `${leftWidth}%`,
-            background: "#1e1e1e",
-            padding: 10,
-            overflow: "auto",
-            borderRight: "3px solid #666",
+            display: "flex",
+            height: "80vh",
+            border: "1px solid #333",
+            marginTop: 20,
+            userSelect: isDragging ? "none" : "auto",
           }}
         >
-          <h4>Code</h4>
-          <SyntaxHighlighter
-            language="python"
-            style={vscDarkPlus}
-            showLineNumbers
+          {/* LEFT PANEL */}
+          <div
+            style={{
+              width: `${leftWidth}%`,
+              background: "#1e1e1e",
+              overflow: "hidden",
+              borderRight: "3px solid #666",
+            }}
           >
-            {fileContent}
-          </SyntaxHighlighter>
-        </div>
+            {fixedCode
+              ? renderDiff(fileContent, fixedCode)
+              : (
+                <Editor
+                  height="100%"
+                  defaultLanguage="python"
+                  value={fileContent}
+                  theme="vs-dark"
+                  onMount={handleEditorMount}
+                />
+              )}
+          </div>
 
-        {/* DRAG BAR */}
-        <div
-          onMouseDown={startDrag}
-          style={{
-            width: 6,
-            cursor: "col-resize",
-            background: "#888",
-          }}
-        />
+          {/* DRAG BAR */}
+          <div
+            onMouseDown={startDrag}
+            style={{
+              width: 6,
+              cursor: "col-resize",
+              background: "#888",
+            }}
+          />
 
-        {/* RIGHT PANEL — AI Result */}
-        <div
-          style={{
-            flex: 1,
-            background: "#0f5132",
-            padding: 10,
-            overflow: "auto",
-            display: showPanel ? "block" : "none",
-            color: "white",
-          }}
-        >
-          <h4>AI Result</h4>
+          {/* RIGHT PANEL */}
+          <div
+            style={{
+              flex: 1,
+              background: "#0f5132",
+              padding: 10,
+              overflow: "auto",
+              display: showPanel ? "block" : "none",
+              color: "white",
+            }}
+          >
+            <h4>AI Result</h4>
 
-          {isAnalyzing && <p>Waiting for analysis…</p>}
+            {isAnalyzing && <p>Working...</p>}
 
-          {analysisResult && (
-            <div>
-              <h4>Explanation</h4>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {explanation}
-              </ReactMarkdown>
+            {analysisResult && (
+              <>
+                <h4>Explanation</h4>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {explanation}
+                </ReactMarkdown>
+                <hr />
+              </>
+            )}
 
-              <button
-                onClick={() => navigator.clipboard.writeText(explanation)}
-                style={{ marginBottom: 20 }}
-              >
-                Copy Explanation
-              </button>
-
-              <hr />
-
-              {codeBlocks.map((block, i) => (
-                <div key={i} style={{ marginBottom: 20 }}>
-                  <SyntaxAI style={aiTheme} language={block.language}>
-                    {block.code}
-                  </SyntaxAI>
-
-                  <button
-                    onClick={() => navigator.clipboard.writeText(block.code)}
-                    style={{ marginTop: 5 }}
-                  >
-                    Copy Code
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+            {fixedCode && (
+              <>
+                <h4>Auto-Fix Applied 🎉</h4>
+                <p>See the changes in the left panel.</p>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-  // ---------------------------
+  // --------------------------------------------------
   // FILE LIST VIEW
-  // ---------------------------
+  // --------------------------------------------------
+
   if (selectedRepo) {
     return (
       <div style={{ width: "80%", textAlign: "left" }}>
@@ -331,9 +403,10 @@ const handleDrag = (e) => {
     );
   }
 
-  // ---------------------------
+  // --------------------------------------------------
   // REPO LIST VIEW
-  // ---------------------------
+  // --------------------------------------------------
+
   return (
     <div style={{ width: "80%", textAlign: "left" }}>
       <h2>Welcome, {userData.login}</h2>
@@ -361,7 +434,7 @@ const handleDrag = (e) => {
 }
 
 // --------------------------------------------------
-// LOGIN COMPONENT
+// LOGIN
 // --------------------------------------------------
 
 function Login() {
@@ -390,15 +463,15 @@ function Login() {
 }
 
 // --------------------------------------------------
-// MAIN APP WRAPPER
+// MAIN APP
 // --------------------------------------------------
 
 function App() {
   const [token, setToken] = useState(null);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const t = urlParams.get("token");
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("token");
 
     if (t) {
       setToken(t);

@@ -32,3 +32,11 @@ class AnalysisConsumer(WebsocketConsumer):
             "message": message
         }))
 
+    def fix_result(self, event):
+        message = event["message"]
+        self.send(text_data=json.dumps({
+            "type": "fix_result",
+            "message": message
+        }))
+
+

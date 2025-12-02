@@ -1,55 +1,51 @@
-import time
 from celery import shared_task
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-# --- NEW IMPORTS ---
-from groq import Groq
 from django.conf import settings
-# --- END NEW IMPORTS ---
+from groq import Groq
 
+
+# Create ONE shared Groq client
+groq_client = Groq(api_key=settings.GROQ_API_KEY)
+
+
+# -----------------------------------------------------------
+# ANALYSIS TASK
+# -----------------------------------------------------------
 @shared_task
 def run_analysis_task(file_content):
-    """
-    This task now calls the Groq API for a free code review.
-    """
-    print("--- ANALYSIS STARTED (with Groq) ---")
+
+    print("--- ANALYSIS STARTED (Groq) ---")
 
     try:
-        # --- THIS IS THE NEW AI CODE ---
-        client = Groq(api_key=settings.GROQ_API_KEY)
-
-        completion = client.chat.completions.create(
-            # We're using Llama 3, which is excellent
+        completion = groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
                     "content": (
                         "You are an expert code reviewer. "
-                        "Find 3 potential bugs, style issues, or optimization "
-                        "opportunities in the following code. Be concise and use bullet points."
+                        "Find exactly 3 bugs, style issues, or optimizations. "
+                        "Use bullet points only."
                     )
                 },
                 {
                     "role": "user",
-                    "content": f"Here is the code to review:\n\n{file_content}"
+                    "content": f"Analyze the following code:\n\n{file_content}"
                 }
             ],
-            temperature=0.7,
+            temperature=0.5,
         )
 
         analysis_result = completion.choices[0].message.content
-        # --- END OF NEW AI CODE ---
-
-        print(f"--- ANALYSIS COMPLETE: {analysis_result} ---")
+        print("--- ANALYSIS COMPLETE ---")
 
     except Exception as e:
-        print(f"--- AI ANALYSIS FAILED: {e} ---")
-        analysis_result = f"Error during analysis: {e}"
+        analysis_result = f"Error: {e}"
+        print(f"--- ANALYSIS FAILED: {e} ---")
 
-
-    # --- This WebSocket code is the same as before ---
+    # Send via WebSocket
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -57,10 +53,60 @@ def run_analysis_task(file_content):
             {
                 "type": "send_analysis_result",
                 "message": analysis_result,
-            },
+            }
         )
-        print("--- Result sent to WebSocket group ---")
+        print("--- Analysis sent to WebSocket ---")
     except Exception as e:
-        print(f"--- FAILED TO SEND TO WEBSOCKET: {e} ---")
+        print(f"--- WebSocket send failed: {e} ---")
 
     return analysis_result
+
+
+
+# -----------------------------------------------------------
+# AUTO FIX TASK
+# -----------------------------------------------------------
+@shared_task
+def run_fix_task(content):
+
+    prompt = f"""
+You are a senior code refactoring AI.
+Fix the ENTIRE file below.
+
+Rules:
+- Return ONLY the corrected code.
+- No explanations.
+- Keep structure similar.
+
+Code:
+{content}
+"""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",  # BETTER than Mixtral
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        fixed_code = response.choices[0].message.content
+
+    except Exception as e:
+        fixed_code = f"Error during fix: {e}"
+
+    # Send via WebSocket
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "analysis_group",
+            {
+                "type": "fix_result",
+                "message": fixed_code,
+            }
+        )
+        print("--- Fix result sent to WebSocket ---")
+    except Exception as e:
+        print(f"--- WebSocket send failed: {e} ---")
+
+    return fixed_code

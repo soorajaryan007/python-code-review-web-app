@@ -1,21 +1,22 @@
-# In backend/api/urls.py
-# In backend/config/urls.py
-
 from django.urls import path
-# Make sure GitHubLoginView is imported
-from .views import (
+from api.views import (
     HelloView,
     GitHubLoginView,
     GitHubCallbackView,
-    AnalysisView  # <-- ADD THIS IMPORT
+    AnalysisView,
+    fix_file
 )
 
 urlpatterns = [
     path('hello/', HelloView.as_view(), name='hello'),
 
-    # Make sure this line is added, saved, and has no typos
+    # GitHub OAuth
     path('auth/github/login/', GitHubLoginView.as_view(), name='github-login'),
     path('auth/github/callback/', GitHubCallbackView.as_view(), name='github-callback'),
+
+    # Analysis endpoint (class-based view)
     path('analyze/', AnalysisView.as_view(), name='analyze'),
 
+    # Auto-fix endpoint (function-based view)
+    path("fix-file/", fix_file, name="fix-file"),
 ]
