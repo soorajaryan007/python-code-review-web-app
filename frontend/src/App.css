@@ -36,3 +36,20 @@
     transform: rotate(360deg);
   }
 }
+/* === Split Pane Styling === */
+.SplitPane {
+  position: relative !important;
+}
+
+.Pane {
+  overflow: auto !important;
+}
+
+.Resizer {
+  background: #444;
+  width: 6px;
+  cursor: col-resize;
+  margin: 0 2px;
+  border-radius: 3px;
+}
+

@@ -33,6 +33,30 @@ function UserDashboard({ token }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [currentPath, setCurrentPath] = useState("");
+  // Drag resize states (MUST be top-level hooks)
+const [leftWidth, setLeftWidth] = useState(50); // percentage
+const [isDragging, setIsDragging] = useState(false);
+
+const startDrag = () => setIsDragging(true);
+const stopDrag = () => setIsDragging(false);
+
+const handleDrag = (e) => {
+  if (!isDragging) return;
+
+  const container = document.getElementById("resize-container");
+  if (!container) return;
+
+  const rect = container.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+
+  let newWidth = (x / rect.width) * 100;
+
+  if (newWidth < 15) newWidth = 15;
+  if (newWidth > 85) newWidth = 85;
+
+  setLeftWidth(newWidth);
+};
+
 
   // ---------------------------
   // FETCH USER + REPOS
@@ -164,107 +188,118 @@ function UserDashboard({ token }) {
   // FILE VIEW + ANALYSIS PANEL
   // ---------------------------
   if (selectedFile) {
-    const showPanel = isAnalyzing || analysisResult;
-    const codeBlocks = extractCodeBlocks(analysisResult);
-    const explanation = analysisResult.replace(/```[\s\S]*?```/g, "").trim();
+  const showPanel = isAnalyzing || analysisResult;
+  const codeBlocks = extractCodeBlocks(analysisResult);
+  const explanation = analysisResult.replace(/```[\s\S]*?```/g, "").trim();
 
-    return (
-      <div style={{ width: "95%", textAlign: "left" }}>
-        <button onClick={() => setSelectedFile(null)}>&larr; Back</button>
-        <h3>{selectedFile.name}</h3>
+  return (
+    <div style={{ width: "95%", textAlign: "left" }}>
+      <button onClick={() => setSelectedFile(null)}>&larr; Back</button>
+      <h3>{selectedFile.name}</h3>
 
-        <button
-          onClick={handleAnalyzeClick}
-          disabled={isAnalyzing}
-          style={{ margin: "10px 0" }}
-        >
-          {isAnalyzing ? "Analyzing..." : "Analyze File"}
-        </button>
+      <button
+        onClick={handleAnalyzeClick}
+        disabled={isAnalyzing}
+        style={{ margin: "10px 0" }}
+      >
+        {isAnalyzing ? "Analyzing..." : "Analyze File"}
+      </button>
 
-        {/* GRID */}
+      {/* Resizable Container */}
+      <div
+        id="resize-container"
+        onMouseMove={handleDrag}
+        onMouseUp={stopDrag}
+        style={{
+          display: "flex",
+          height: "80vh",
+          border: "1px solid #333",
+          marginTop: 20,
+          userSelect: isDragging ? "none" : "auto",
+        }}
+      >
+        {/* LEFT PANEL — Code */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            marginTop: "20px",
+            width: `${leftWidth}%`,
+            background: "#1e1e1e",
+            padding: 10,
+            overflow: "auto",
+            borderRight: "3px solid #666",
           }}
         >
-          {/* LEFT — CODE */}
-          <div
-            style={{
-              background: "#1e1e1e",
-              padding: 10,
-              borderRadius: 8,
-              maxHeight: "80vh",
-              overflow: "auto",
-            }}
+          <h4>Code</h4>
+          <SyntaxHighlighter
+            language="python"
+            style={vscDarkPlus}
+            showLineNumbers
           >
-            <h4>Code</h4>
-            <SyntaxHighlighter
-              language="python"
-              style={vscDarkPlus}
-              showLineNumbers
-            >
-              {fileContent}
-            </SyntaxHighlighter>
-          </div>
+            {fileContent}
+          </SyntaxHighlighter>
+        </div>
 
-          {/* RIGHT — AI RESULT */}
-          <div
-            style={{
-              background: "#0f5132",
-              padding: 10,
-              borderRadius: 8,
-              maxHeight: "80vh",
-              overflow: "auto",
-              display: showPanel ? "block" : "none",
-              color: "white",
-            }}
-          >
-            <h4>AI Result</h4>
+        {/* DRAG BAR */}
+        <div
+          onMouseDown={startDrag}
+          style={{
+            width: 6,
+            cursor: "col-resize",
+            background: "#888",
+          }}
+        />
 
-            {isAnalyzing && <p>Waiting for analysis…</p>}
+        {/* RIGHT PANEL — AI Result */}
+        <div
+          style={{
+            flex: 1,
+            background: "#0f5132",
+            padding: 10,
+            overflow: "auto",
+            display: showPanel ? "block" : "none",
+            color: "white",
+          }}
+        >
+          <h4>AI Result</h4>
 
-            {analysisResult && (
-              <div>
-                {/* Explanation */}
-                <h4>Explanation</h4>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {explanation}
-                </ReactMarkdown>
+          {isAnalyzing && <p>Waiting for analysis…</p>}
 
-                <button
-                  onClick={() => navigator.clipboard.writeText(explanation)}
-                  style={{ marginBottom: 20 }}
-                >
-                  Copy Explanation
-                </button>
+          {analysisResult && (
+            <div>
+              <h4>Explanation</h4>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {explanation}
+              </ReactMarkdown>
 
-                <hr />
+              <button
+                onClick={() => navigator.clipboard.writeText(explanation)}
+                style={{ marginBottom: 20 }}
+              >
+                Copy Explanation
+              </button>
 
-                {/* Code Blocks */}
-                {codeBlocks.map((block, i) => (
-                  <div key={i} style={{ marginBottom: 20 }}>
-                    <SyntaxAI style={aiTheme} language={block.language}>
-                      {block.code}
-                    </SyntaxAI>
+              <hr />
 
-                    <button
-                      onClick={() => navigator.clipboard.writeText(block.code)}
-                      style={{ marginTop: 5 }}
-                    >
-                      Copy Code
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              {codeBlocks.map((block, i) => (
+                <div key={i} style={{ marginBottom: 20 }}>
+                  <SyntaxAI style={aiTheme} language={block.language}>
+                    {block.code}
+                  </SyntaxAI>
+
+                  <button
+                    onClick={() => navigator.clipboard.writeText(block.code)}
+                    style={{ marginTop: 5 }}
+                  >
+                    Copy Code
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // ---------------------------
   // FILE LIST VIEW
