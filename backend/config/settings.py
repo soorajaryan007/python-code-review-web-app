@@ -157,3 +157,11 @@ GROQ_API_KEY = config('GROQ_API_KEY')
 # This is the URL of our RabbitMQ server
 CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
 
+ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1"]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost",
+    "http://127.0.0.1",
+]
+
+
