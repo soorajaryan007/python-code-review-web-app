@@ -52,7 +52,8 @@ class GitHubCallbackView(APIView):
         if not access_token:
             return Response({"error": "No access token in response"}, status=400)
 
-        return redirect(f'http://localhost:3000?token={access_token}')
+        return redirect(f'http://localhost/?token={access_token}')
+
 
 
 # -------------------------------------------------------

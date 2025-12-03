@@ -2,77 +2,75 @@
 
 **AI-Powered Code Review** is a full-stack web application that securely connects to your GitHub account, allows you to browse your repositories, and provides real-time, asynchronous code analysis using AI.
 
-This project uses a modern, scalable architecture with a decoupled React frontend and a Django backend. It leverages Celery, RabbitMQ, and Redis to process AI analysis requests in the background and delivers the results instantly to the user via WebSockets.
+This project uses a modern, scalable architecture with a decoupled React frontend and a Django backend. It leverages Celery, RabbitMQ, and Redis to process AI analysis requests in the background and delivers the results instantly to the user via WebSockets — now routed through an **NGINX API Gateway** for production.
 
 <!-- Replace this with a real screenshot URL! -->
 
 ---
 
-# 🏛️ Architecture Overview
+# 🏛️ Architecture Overview (Updated for NGINX)
 
 This application runs on five core services that all work together:
 
-### 🔹 React Frontend: (Port 3000)
+### 🔹 React Frontend (Served by NGINX)
 
-The user interface, built in React.
+The React build is served from **frontend/build/** by NGINX at:
 
-### 🔹 Django/Daphne Backend: (Port 8000)
+```
+http://localhost
+```
+
+### 🔹 Django/Daphne Backend (Port 8000 - internal only)
 
 The ASGI server that handles all HTTP API requests and WebSocket connections.
+Users DO NOT access port 8000 directly.
 
-### 🔹 RabbitMQ: (Port 5672)
+### 🔹 RabbitMQ (Port 5672)
 
-The message broker that holds "analysis" jobs for Celery.
+The message broker that holds background jobs.
 
-### 🔹 Redis: (Port 6379)
+### 🔹 Redis (Port 6379)
 
-The channel layer broker that allows Django to send real-time WebSocket messages.
+The channel layer used for real-time WebSocket communication.
 
 ### 🔹 Celery Worker
 
-A background process that picks up jobs from RabbitMQ, calls the AI, and publishes results to Redis.
+A background worker that processes AI analysis tasks.
 
 ---
 
-    subgraph User's Computer
-        A[🌐 Browser @ localhost:3000<br>(React App)]
-    end
-    
-    subgraph Server-Side Services
-        B[🐍 Django Server @ localhost:8000<br>(Daphne - ASGI)]
-        C[🐇 Celery Worker<br>(Background Process)]
-        D[🐰 RabbitMQ<br>(Message Queue)]
-        E[♦️ Redis<br>(Channel Layer)]
-    end
-    
-    subgraph External APIs
-        F[🐙 GitHub API<br>(OAuth & Repo Data)]
-        G[🤖 Groq AI API<br>(Code Analysis)]
-    end
-    
-    A -- 1. Login --> F
-    F -- 2. Auth Callback --> B
-    B -- 3. Get Repos --> F
-    F -- 4. Repo List --> B
-    B -- 5. Show Repos --> A
-    A -- 6. Analyze File (HTTP POST) --> B
-    B -- 7. Create Task --> D
-    C -- 8. Get Task --> D
-    C -- 9. Call AI --> G
-    G -- 10. AI Result --> C
-    C -- 11. Send Result --> E
-    E -- 12. WebSocket Push --> B
-    B -- 13. WebSocket Push --> A
+### **Updated Architecture Flow (correct)**
+
+```
+User Browser @ http://localhost
+        │
+        ▼
+NGINX (Port 80)
+ - Serves React frontend
+ - Proxies /api → Django (8000)
+ - Proxies /ws → Django Channels (8000)
+        │
+        ▼
+Django ASGI (Daphne @ 8000)
+        │
+ ┌──────┴──────────────┐
+ ▼                      ▼
+RabbitMQ (Queue)     Redis (WebSockets)
+        │                  │
+        ▼                  ▼
+Celery Worker → Groq AI → Sends result back → Django → WebSocket → User
+```
 
 ---
 
 # ✨ Features
 
-* Secure GitHub Login: Authenticates users via the GitHub OAuth2 flow.
-* Repository Browser: Fetches and displays a user's repositories, including files and folder structure.
-* Code Viewer: Renders file content with syntax highlighting.
-* Asynchronous AI Analysis: Uses Celery and RabbitMQ to run AI code reviews in a background task, so the UI is never blocked.
-* Real-time Results: Uses Django Channels and Redis to push the analysis results to the user over a WebSocket the moment they are ready.
+* Secure GitHub Login (OAuth)
+* Browse GitHub Repositories
+* Syntax-highlighted code viewer
+* Asynchronous AI code analysis (Celery + RabbitMQ)
+* Real-time AI results through WebSockets (Channels + Redis)
+* Production-ready NGINX API Gateway
 
 ---
 
@@ -80,23 +78,20 @@ A background process that picks up jobs from RabbitMQ, calls the AI, and publish
 
 ### Frontend:
 
-React, React Hooks, react-syntax-highlighter, atob
+React, React Hooks, Monaco Editor, diff viewer
+**Served by NGINX (no dev server needed)**
 
 ### Backend:
 
-Python, Django, Django REST Framework, Django Channels
+Python, Django, Django REST Framework, Django Channels, Daphne
 
 ### Async & Real-time:
 
 Celery, RabbitMQ, Redis, WebSockets
 
-### Database:
-
-SQLite (default for development)
-
 ### AI:
 
-Groq API (using the Llama 3, Mixtral, or Gemma models)
+Groq API (using Llama 3 / Mixtral / Gemma)
 
 ### Auth:
 
@@ -104,19 +99,20 @@ GitHub OAuth
 
 ### Infrastructure:
 
-Docker (for RabbitMQ and Redis)
+Docker (RabbitMQ & Redis)
+NGINX reverse proxy + static server
 
 ---
 
 # ⚖️ License
 
-This project is licensed under the MIT License - see the LICENSE.txt file for details.
+This project is licensed under the MIT License – see LICENSE.txt.
 
 ---
 
 # 🛠️ Setup & Installation
 
-Before you begin, you must have **Docker installed** and running on your system.
+Before you begin, you must have **Docker** and **NGINX** installed.
 
 ---
 
@@ -145,11 +141,20 @@ pip install -r requirements.txt
 ```bash
 cd frontend
 npm install
+npm run build   # IMPORTANT: Build React for NGINX
 ```
+
+This generates:
+
+```
+frontend/build/
+```
+
+Which NGINX will serve automatically.
 
 ---
 
-# **4. Configuration (API Keys)**
+## **4. Configure Environment Variables**
 
 Install python-decouple:
 
@@ -157,12 +162,12 @@ Install python-decouple:
 pip install python-decouple
 ```
 
-Create `.env` file inside `backend/`:
+Create `.env` inside backend:
 
 ```
-GITHUB_CLIENT_ID=your_github_client_id_here
-GITHUB_CLIENT_SECRET=your_github_client_secret_here
-GROQ_API_KEY=your_groq_api_key_here
+GITHUB_CLIENT_ID=your_id_here
+GITHUB_CLIENT_SECRET=your_secret_here
+GROQ_API_KEY=your_groq_key_here
 ```
 
 Update `backend/config/settings.py`:
@@ -177,9 +182,9 @@ GROQ_API_KEY = config('GROQ_API_KEY')
 
 ---
 
-# 🚀 How to Run
+# 🚀 How to Run the System (Updated for NGINX)
 
-You need **5 terminals** open to run the entire system.
+You need **4 terminals**, not 5 (React dev server not required).
 
 ---
 
@@ -201,12 +206,12 @@ docker start my-redis
 
 ---
 
-### **Terminal 3 — Start Backend (Daphne)**
+### **Terminal 3 — Start Django Backend (Daphne)**
 
 ```bash
 cd backend
 source venv/bin/activate
-daphne config.asgi:application
+daphne config.asgi:application --port 8000
 ```
 
 ---
@@ -221,11 +226,46 @@ celery -A config worker --loglevel=info
 
 ---
 
-### **Terminal 5 — Start React Frontend**
+# 🧱 Start NGINX (API Gateway)
+
+Your NGINX config should look like:
+
+```
+/etc/nginx/sites-available/api-gateway
+```
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    # Serve React build
+    root /home/xxxxx/python-code-review-web-app/frontend/build;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    # Proxy Django API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+    }
+
+    # Proxy WebSockets
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8000/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Test and restart NGINX:
 
 ```bash
-cd frontend
-npm start
+sudo nginx -t
+sudo systemctl restart nginx
 ```
 
 ---
@@ -234,10 +274,9 @@ npm start
 
 Visit:
 
-👉 **[http://localhost:3000](http://localhost:3000)**
+👉 **[http://localhost](http://localhost)**
+(not [http://localhost:3000](http://localhost:3000))
 
-to use the application.
+NGINX will serve the frontend and route all API/WebSocket traffic automatically.
 
 ---
-
-

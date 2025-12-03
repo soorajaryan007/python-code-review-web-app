@@ -126,28 +126,36 @@ function UserDashboard({ token }) {
   }, [token]);
 
   // --------------------------------------------------
-  // WEBSOCKET
-  // --------------------------------------------------
+  // WEBSOCKET (GATEWAY COMPATIBLE)
+// --------------------------------------------------
+useEffect(() => {
+  const ws = new WebSocket(`ws://${window.location.host}/ws/analysis/`);
 
-  useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws/analysis/");
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+  ws.onmessage = (event) => {
+    let data;
 
-      if (data.type === "analysis_result") {
-        setAnalysisResult(data.message);
-        setIsAnalyzing(false);
-      }
+    try {
+      data = JSON.parse(event.data);
+    } catch (err) {
+      console.warn("Non-JSON WebSocket message:", event.data);
+      return;
+    }
 
-      if (data.type === "fix_result") {
-        setFixedCode(data.message);
-        setIsAnalyzing(false);
-      }
-    };
+    if (data.type === "analysis_result") {
+      setAnalysisResult(data.message);
+      setIsAnalyzing(false);
+    }
 
-    return () => ws.close();
-  }, []);
+    if (data.type === "fix_result") {
+      setFixedCode(data.message);
+      setIsAnalyzing(false);
+    }
+  };
+
+  return () => ws.close();
+}, []);
+
 
   // --------------------------------------------------
   // NAVIGATION
@@ -186,7 +194,7 @@ function UserDashboard({ token }) {
   };
 
   // --------------------------------------------------
-  // ANALYZE FILE
+  // ANALYZE FILE (THROUGH GATEWAY)
   // --------------------------------------------------
 
   const handleAnalyzeClick = async () => {
@@ -194,7 +202,7 @@ function UserDashboard({ token }) {
     setFixedCode("");
     setIsAnalyzing(true);
 
-    await fetch("http://127.0.0.1:8000/api/analyze/", {
+    await fetch("/api/analyze/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: fileContent }),
@@ -202,14 +210,14 @@ function UserDashboard({ token }) {
   };
 
   // --------------------------------------------------
-  // AUTO FIX FILE
+  // AUTO FIX FILE (THROUGH GATEWAY)
   // --------------------------------------------------
 
   const handleFixClick = async () => {
     setFixedCode("");
     setIsAnalyzing(true);
 
-    await fetch("http://127.0.0.1:8000/api/fix-file/", {
+    await fetch("/api/fix-file/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: fileContent }),
@@ -436,17 +444,19 @@ function UserDashboard({ token }) {
 // --------------------------------------------------
 // LOGIN
 // --------------------------------------------------
-
 function Login() {
   const [clientId, setClientId] = useState("");
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/auth/github/login/")
+    fetch("/api/auth/github/login/")
       .then((res) => res.json())
       .then((data) => setClientId(data.client_id));
   }, []);
 
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user%20repo`;
+  const redirectUri = "http://localhost/api/auth/github/callback/";
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+    redirectUri
+  )}&scope=read:user%20repo`;
 
   return (
     <div>
@@ -462,6 +472,7 @@ function Login() {
   );
 }
 
+
 // --------------------------------------------------
 // MAIN APP
 // --------------------------------------------------
@@ -471,6 +482,7 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
     const t = params.get("token");
 
     if (t) {
