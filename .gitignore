@@ -1,2 +1,9 @@
 backend/.env
 backend/.env
+
+/backend/logs/
+/frontend/logs/
+/logs/
+*.log
+*.gz
+
