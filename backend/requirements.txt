@@ -145,7 +145,7 @@ more-itertools==8.10.0
 mpmath==1.3.0
 msgpack==1.1.2
 multidict==6.7.0
-mylang @ file:///home/sooraj/mylang
+
 mypy==0.942
 mypy-extensions==0.4.3
 netaddr==0.8.0
